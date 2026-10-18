@@ -74,57 +74,58 @@ static int search(uint16_t root_p,
     face[0] = 3; // no previous node
     COUNT();
 
+    // depth 1 starts at face 0 from the root
     face[1] = 0;
     turns[1] = 0;
+    p[1] = root_p;
+    o[1] = root_o;
 
     // we have items in stack
     while (depth > 0) {
-        if (turns[depth] == 3) {
-            // try next face moves
-            ++face[depth];
+        // one more quarter turn of the same face, the only test per child
+        if (turns[depth] < 3) {
+            // one entry gives the next rank and its heuristic value
+            const move_t *mp = &move_perm[face[depth]][p[depth]];
+            const move_t *mo = &move_orient[face[depth]][o[depth]];
+            p[depth] = mp->next;
+            o[depth] = mo->next;
+            ++turns[depth];
+            // moves left after this one, test both tables instead of max
+            int left = bound - depth;
+            if (mp->h > left || mo->h > left)
+                continue;
+            // h is 0 only when solved, and a shorter solution would have
+            // been found with an earlier bound, so only the last level can
+            // be solved
+            if (left == 0) {
+                for (int i = 1; i <= depth; ++i)
+                    moves[i - 1] = (uint8_t) (face[i] * 3 + turns[i] - 1);
+                return depth;
+            }
+            // not solved means h >= 1, so depth + 1 <= bound
+            COUNT();
+            ++depth;
+            // first face that differs from the one just turned
+            face[depth] = face[depth - 1] == 0;
             turns[depth] = 0;
+            p[depth] = p[depth - 1];
+            o[depth] = o[depth - 1];
+            continue;
         }
 
-        // prune consecutive face moves
-        if (face[depth] == face[depth - 1]) {
-            ++face[depth];
-            turns[depth] = 0;
-        }
-
+        // face done: next face, never the same face twice in a row
+        uint8_t next = (uint8_t) (face[depth] + 1);
+        if (next == face[depth - 1])
+            ++next;
         // all moves has been tried
-        if (face[depth] >= 3) {
+        if (next >= 3) {
             --depth;
             continue;
         }
-
-        // haven't started turning
-        if (turns[depth] == 0) {
-            p[depth] = p[depth - 1];
-            o[depth] = o[depth - 1];
-        }
-
-        // one entry gives the next rank and its heuristic value
-        const move_t *mp = &move_perm[face[depth]][p[depth]];
-        const move_t *mo = &move_orient[face[depth]][o[depth]];
-        p[depth] = mp->next;
-        o[depth] = mo->next;
-        ++turns[depth];
-        // moves left after this one, test both tables instead of taking max
-        int left = bound - depth;
-        if (mp->h > left || mo->h > left)
-            continue;
-        // h is 0 only when solved, and a shorter solution would have been
-        // found with an earlier bound, so only the last level can be solved
-        if (left == 0) {
-            for (int i = 1; i <= depth; ++i)
-                moves[i - 1] = (uint8_t) (face[i] * 3 + turns[i] - 1);
-            return depth;
-        }
-        // not solved means h >= 1, so depth + 1 <= bound
-        COUNT();
-        ++depth;
-        face[depth] = 0;
+        face[depth] = next;
         turns[depth] = 0;
+        p[depth] = p[depth - 1];
+        o[depth] = o[depth - 1];
     }
     return -1;
 }
