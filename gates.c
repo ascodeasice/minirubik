@@ -1,5 +1,6 @@
 // host gates H1-H3 for ida.c, checked against exact BFS distances
 // usage: gates [workers], default is CPUs - 2
+//        gates --list11, print distance-11 states and their node counts
 #define _POSIX_C_SOURCE 200112L
 #define IDA_NO_MAIN
 #include "ida.c"
@@ -273,9 +274,35 @@ static int gate_h3(const uint8_t *dist, uint32_t workers)
     return all.wrong_length == 0 && all.not_solved == 0 && all.n11 == 2644;
 }
 
+// every distance-11 state with its expanded node count, for the Ripes sweep
+static int list11(void)
+{
+    uint8_t *dist = exact_distances();
+    if (!dist)
+        return 1;
+    for (uint32_t s = 0; s < STATES; ++s) {
+        if (dist[s] != 11)
+            continue;
+        uint8_t moves[MAX_DEPTH];
+        state_t state;
+        solve((uint16_t) (s / ORIENTATIONS), (uint16_t) (s % ORIENTATIONS),
+              moves);
+        unrank_state(s, &state);
+        for (int i = 0; i < CUBIES; ++i)
+            putchar('1' + state.p[i]);
+        for (int i = 0; i < CUBIES; ++i)
+            putchar('1' + state.o[i]);
+        printf(" %lu\n", (unsigned long) expanded);
+    }
+    free(dist);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     long cpus = sysconf(_SC_NPROCESSORS_ONLN);
+    if (argc == 2 && !strcmp(argv[1], "--list11"))
+        return list11();
     uint32_t workers = cpus > 3 ? (uint32_t) (cpus - 2) : 1;
     if (argc > 2 || (argc == 2 && (atoi(argv[1]) < 1 || atoi(argv[1]) > 64))) {
         fprintf(stderr, "usage: %s [workers, 1 to 64]\n", argv[0]);
