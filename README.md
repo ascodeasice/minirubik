@@ -224,3 +224,19 @@ empty line.
 
 See [`report.md`](report.md) for the model, algorithm, diagrams, and Frama-C
 validation notes.
+
+## RV32I version for Ripes
+
+`ida.c` solves the same input by IDA* with two pattern databases instead of a full table, and `cube.S` is the hand-written RV32I version of it for [Ripes](https://github.com/mortbopet/Ripes). Ripes' assembler has no `.if`, so `cube.S` goes through cpp first; the two builds differ only in the LED renderer.
+
+| Command | What it does |
+| :--- | :--- |
+| `make gates` | Host gates H1 to H3 against the exact BFS table (about a minute) |
+| `make ref` | `riscv64-elf-gcc -O2 -march=rv32i` build of `ida.c`, retired instructions on `RV32_ISS` |
+| `make asm` | `cube-cli.s` (built-in tests) and single-state builds on `RV32_ISS`, plus `.text`/`.data` sizes |
+| `make cube-21345671111111.s` | CLI build for any 14-digit state |
+| `make cube-gui.s` | GUI build with the LED matrix (Width 35, Height 25 in the I/O tab) |
+| `make ledtest` | Renderer drawn into plain memory, checked against `led_model.py` |
+| `./sweep.sh tests/distance11.txt` | Every distance-11 state on `RV32_ISS`, in parallel |
+
+The exit code of the assembly program is the number of failed cases; each case checks the solution length and replays the moves back to solved.
