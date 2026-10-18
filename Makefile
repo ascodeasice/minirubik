@@ -12,15 +12,31 @@ VECTORS := tests/solutions.txt
 INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 	12345671111110 12345671111114 1234567111111a 11345671111111 12345671111112
 
-.PHONY: all check prove clean indent
+.PHONY: all check gates prove clean indent
 
-all: solver mini
+all: solver mini ida
 
 solver: solver.c
 	$(CC) $(CFLAGS) $< -o $@
 
 mini: mini.c
 	$(CC) $(CFLAGS) $< -o $@
+
+pdb_gen: pdb_gen.c
+	$(CC) $(CFLAGS) $< -o $@
+
+pdb.h: pdb_gen
+	./pdb_gen c >$@
+
+ida: ida.c pdb.h
+	$(CC) $(CFLAGS) $< -o $@
+
+gates-bin: gates.c ida.c pdb.h
+	$(CC) $(CFLAGS) $< -o $@
+
+# H1 to H3 on the host; H3 solves all 3,674,160 states.
+gates: gates-bin
+	./gates-bin
 
 check: solver mini $(VECTORS)
 	./solver --self-test
@@ -94,4 +110,4 @@ endif
 	$(CLANG_FORMAT) -i $(C_SOURCES)
 
 clean:
-	$(RM) solver mini
+	$(RM) solver mini pdb_gen pdb.h ida gates-bin

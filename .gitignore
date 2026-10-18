@@ -3,3 +3,8 @@
 *.swp
 solver
 mini
+pdb_gen
+ida_check
+pdb.h
+ida
+gates-bin
