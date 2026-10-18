@@ -64,7 +64,10 @@ cube_p: .zero   8                   # cubie at each position
 cube_o: .zero   8                   # its orientation
 tmp:    .zero   8
 moves:  .zero   12                  # solution as move codes
-frames: .zero   400                 # saved levels, 36 bytes each
+frames: .zero   192                 # saved levels, 16 bytes each
+# where each of the nine moves resumes, indexed by move code; Ripes cannot
+# put a text label in .word, so solve fills it in
+resume: .zero   36
 
         .text
 main:
@@ -201,76 +204,184 @@ unsolved:
         bge     a2, t0, bound_set
         mv      a2, t0
 bound_set:
-        la      a4, move_perm
-        la      a5, move_orient
-        li      a6, 20160           # one face of move_perm in bytes
-        li      a7, 2916            # one face of move_orient
-        li      t4, 3
-        la      t5, frames
+        # one base register per face and table, so every turn is fixed code
+        la      s3, move_perm
+        li      t0, 20160           # one face of move_perm in bytes
+        add     s4, s3, t0
+        add     s10, s4, t0
+        la      s11, move_orient
+        li      t0, 2916            # one face of move_orient
+        add     a4, s11, t0
+        add     a5, a4, t0
+        la      t1, resume
+        la      t0, f0t2
+        sw      t0, 0(t1)
+        la      t0, f0t3
+        sw      t0, 4(t1)
+        la      t0, f0end
+        sw      t0, 8(t1)
+        la      t0, f1t2
+        sw      t0, 12(t1)
+        la      t0, f1t3
+        sw      t0, 16(t1)
+        la      t0, f1end
+        sw      t0, 20(t1)
+        la      t0, f2t2
+        sw      t0, 24(t1)
+        la      t0, f2t3
+        sw      t0, 28(t1)
+        la      t0, f2end
+        sw      t0, 32(t1)
+        li      t4, 1
+        li      t5, 2
+        la      a3, frames
 iteration:
         # one depth-first pass, root at depth 0 with no previous face
         mv      s8, a0
         mv      s9, a1
         li      s5, 3
         addi    s6, a2, -1          # moves left after a child of the root
-        mv      s7, t5
+        mv      s7, a3
+        j       node
+descend0:
+        li      a6, 0
+        j       descend
+descend1:
+        li      a6, 1
+        j       descend
+descend2:
+        li      a6, 2
+descend:
+        beqz    s6, found           # h = 0 only at solved
+        # save this level, 16 bytes, the child becomes the node
+        sw      t6, 0(s7)
+        sw      s8, 4(s7)
+        sw      s9, 8(s7)
+        sw      s5, 12(s7)
+        addi    s7, s7, 16
+        mv      s8, s1
+        mv      s9, s2
+        mv      s5, a6
+        addi    s6, s6, -1
 node:
-        li      s3, 0
-        mv      s10, a4
-        mv      s11, a5
-face:
-        beq     s3, s5, next_face   # never turn the same face twice
+        # never turn the same face twice: skip the face in s5
+        beqz    s5, face1
+face0:
         mv      s1, s8
         mv      s2, s9
-        li      s4, 0
-turn:
-        add     t0, s10, s1
+f0t1:
+        add     t0, s3, s1
         lhu     s1, 0(t0)           # next permutation offset
         lbu     t1, 2(t0)           # its pattern database value
         add     t2, s11, s2
         lhu     s2, 0(t2)
         lbu     t3, 2(t2)
-        addi    s4, s4, 1
-        blt     s6, t1, pruned      # h > moves left
-        blt     s6, t3, pruned
-        beqz    s6, found           # h = 0 only at solved
-        # descend: save this level, the child becomes the node
-        sw      s1, 0(s7)
-        sw      s2, 4(s7)
-        sw      s8, 8(s7)
-        sw      s9, 12(s7)
-        sw      s10, 16(s7)
-        sw      s11, 20(s7)
-        sw      s3, 24(s7)
-        sw      s4, 28(s7)
-        sw      s5, 32(s7)
-        addi    s7, s7, 36
-        mv      s8, s1
-        mv      s9, s2
-        mv      s5, s3
-        addi    s6, s6, -1
-        j       node
-pruned:
-        bne     s4, t4, turn
-next_face:
-        addi    s3, s3, 1
-        add     s10, s10, a6
-        add     s11, s11, a7
-        bne     s3, t4, face
-        # every move tried: back up one level
-        beq     s7, t5, deeper
-        addi    s7, s7, -36
-        lw      s1, 0(s7)
-        lw      s2, 4(s7)
-        lw      s8, 8(s7)
-        lw      s9, 12(s7)
-        lw      s10, 16(s7)
-        lw      s11, 20(s7)
-        lw      s3, 24(s7)
-        lw      s4, 28(s7)
-        lw      s5, 32(s7)
+        blt     s6, t1, f0t2       # h > moves left
+        blt     s6, t3, f0t2
+        jal     t6, descend0      # t6 is where this level resumes
+f0t2:
+        add     t0, s3, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, s11, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f0t3       # h > moves left
+        blt     s6, t3, f0t3
+        jal     t6, descend0      # t6 is where this level resumes
+f0t3:
+        add     t0, s3, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, s11, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f0end       # h > moves left
+        blt     s6, t3, f0end
+        jal     t6, descend0      # t6 is where this level resumes
+f0end:
+        beq     s5, t4, face2
+face1:
+        mv      s1, s8
+        mv      s2, s9
+f1t1:
+        add     t0, s4, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, a4, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f1t2       # h > moves left
+        blt     s6, t3, f1t2
+        jal     t6, descend1      # t6 is where this level resumes
+f1t2:
+        add     t0, s4, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, a4, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f1t3       # h > moves left
+        blt     s6, t3, f1t3
+        jal     t6, descend1      # t6 is where this level resumes
+f1t3:
+        add     t0, s4, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, a4, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f1end       # h > moves left
+        blt     s6, t3, f1end
+        jal     t6, descend1      # t6 is where this level resumes
+f1end:
+        beq     s5, t5, ascend
+face2:
+        mv      s1, s8
+        mv      s2, s9
+f2t1:
+        add     t0, s10, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, a5, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f2t2       # h > moves left
+        blt     s6, t3, f2t2
+        jal     t6, descend2      # t6 is where this level resumes
+f2t2:
+        add     t0, s10, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, a5, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f2t3       # h > moves left
+        blt     s6, t3, f2t3
+        jal     t6, descend2      # t6 is where this level resumes
+f2t3:
+        add     t0, s10, s1
+        lhu     s1, 0(t0)           # next permutation offset
+        lbu     t1, 2(t0)           # its pattern database value
+        add     t2, a5, s2
+        lhu     s2, 0(t2)
+        lbu     t3, 2(t2)
+        blt     s6, t1, f2end       # h > moves left
+        blt     s6, t3, f2end
+        jal     t6, descend2      # t6 is where this level resumes
+f2end:
+ascend:
+        # every move tried: back up one level, the child was s8/s9
+        beq     s7, a3, deeper
+        addi    s7, s7, -16
+        mv      s1, s8
+        mv      s2, s9
+        lw      t6, 0(s7)
+        lw      s8, 4(s7)
+        lw      s9, 8(s7)
+        lw      s5, 12(s7)
         addi    s6, s6, 1
-        j       pruned
+        jr      t6
 deeper:
         addi    a2, a2, 1
         li      t0, 12
@@ -278,21 +389,24 @@ deeper:
         li      a0, -1
         ret
 found:
-        # moves from the saved levels, then the current one
-        sw      s3, 24(s7)
-        sw      s4, 28(s7)
+        # every saved resume address names a move, look each one up
+        sw      t6, 0(s7)
         la      t0, moves
-        mv      t1, t5
+        mv      t1, a3
 copy:
-        lw      t2, 24(t1)
-        lw      t3, 28(t1)
-        slli    t6, t2, 1
-        add     t2, t2, t6          # face * 3
-        add     t2, t2, t3
-        addi    t2, t2, -1
-        sb      t2, 0(t0)
+        lw      t2, 0(t1)
+        la      t3, resume
+        li      a6, 0
+find:
+        lw      a7, 0(t3)
+        beq     a7, t2, code_found
+        addi    t3, t3, 4
+        addi    a6, a6, 1
+        j       find
+code_found:
+        sb      a6, 0(t0)
         addi    t0, t0, 1
-        addi    t1, t1, 36
+        addi    t1, t1, 16
         bgeu    s7, t1, copy
         mv      a0, a2
         ret
