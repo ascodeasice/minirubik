@@ -19,8 +19,13 @@ typedef struct {
 static const char *const move_names[MOVES] = {"R",  "R2", "R'", "B", "B2",
                                               "B'", "D",  "D2", "D'"};
 
-// how many nodes are expanded
+// how many nodes are expanded, only counted in host tools
+#ifdef IDA_COUNT
 static uint32_t expanded;
+#define COUNT() (++expanded)
+#else
+#define COUNT() ((void) 0)
+#endif
 
 // functions from solver.c
 static uint32_t rank_state(const state_t *state)
@@ -67,7 +72,7 @@ static int search(uint16_t root_p,
     p[0] = root_p;
     o[0] = root_o;
     face[0] = 3; // no previous node
-    ++expanded;
+    COUNT();
 
     face[1] = 0;
     turns[1] = 0;
@@ -109,7 +114,7 @@ static int search(uint16_t root_p,
             return depth;
         }
         // not solved means h >= 1, so depth + 1 <= bound
-        ++expanded;
+        COUNT();
         ++depth;
         face[depth] = 0;
         turns[depth] = 0;
@@ -120,7 +125,9 @@ static int search(uint16_t root_p,
 // ida* for cube, store result in moves
 static int solve(uint16_t p, uint16_t o, uint8_t moves[MAX_DEPTH])
 {
+#ifdef IDA_COUNT
     expanded = 0;
+#endif
     // solved
     if (p == 0 && o == 0)
         return 0;

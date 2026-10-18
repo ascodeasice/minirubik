@@ -29,10 +29,10 @@ pdb.h: pdb_gen
 	./pdb_gen c >$@
 
 ida: ida.c pdb.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) -DIDA_COUNT $< -o $@
 
 gates-bin: gates.c ida.c pdb.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) -DIDA_COUNT $< -o $@
 
 # H1 to H3 on the host; H3 solves all 3,674,160 states.
 gates: gates-bin
