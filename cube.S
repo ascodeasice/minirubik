@@ -1,7 +1,8 @@
 # minirubik on RV32I: optimal 2x2x2 solver by IDA* with two pattern databases
 # Ripes' assembler has no .if, so this file goes through cpp first:
 #   gcc -E -P -x assembler-with-cpp -DRENDER=0 cube.S > cube-cli.s
-# RENDER=1 adds the LED matrix renderer and nothing else.
+# Setting the renderer flag to 1 adds the LED matrix code and nothing else
+# (comments avoid the flag's name, or cpp would replace it here too).
 # Exit code is the number of failed cases, 0 means every case passed.
 
 #ifndef RENDER
