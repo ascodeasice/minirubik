@@ -12,7 +12,7 @@ VECTORS := tests/solutions.txt
 INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 	12345671111110 12345671111114 1234567111111a 11345671111111 12345671111112
 
-.PHONY: all check gates prove clean indent
+.PHONY: all check gates ref prove clean indent
 
 all: solver mini ida
 
@@ -37,6 +37,23 @@ gates-bin: gates.c ida.c pdb.h
 # H1 to H3 on the host; H3 solves all 3,674,160 states.
 gates: gates-bin
 	./gates-bin
+
+# gcc reference build of ida.c for Ripes, one ELF per state
+RV_CC ?= riscv64-elf-gcc
+RV_CFLAGS := -O2 -march=rv32i -mabi=ilp32 -nostartfiles -static
+REF_STATES := 54721631111111 21345671111111 62345713133111
+
+ref/ida-%.elf: ref/target.c ref/start.s ida.c pdb.h
+	$(RV_CC) $(RV_CFLAGS) $$(ref/rank.sh $*) ref/start.s ref/target.c -o $@
+
+ref: $(REF_STATES:%=ref/ida-%.elf)
+	@for s in $(REF_STATES); do \
+		printf '%s ' $$s; \
+		ripes --mode cli --src ref/ida-$$s.elf -t elf --proc RV32_ISS --iret | \
+			awk 'NR == 1 { printf "length %s ", $$1 } /exited/ { printf "exit %s ", $$NF } \
+				/retired/ { getline; print "iret", $$1 }'; \
+	done
+	@riscv64-elf-size -A ref/ida-$(firstword $(REF_STATES)).elf | awk '$$1 == ".text" { print ".text", $$2, "bytes" }'
 
 check: solver mini $(VECTORS)
 	./solver --self-test
@@ -110,4 +127,4 @@ endif
 	$(CLANG_FORMAT) -i $(C_SOURCES)
 
 clean:
-	$(RM) solver mini pdb_gen pdb.h ida gates-bin
+	$(RM) solver mini pdb_gen pdb.h ida gates-bin ref/*.elf
