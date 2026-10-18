@@ -7,6 +7,15 @@
 #ifndef RENDER
 #define RENDER 0
 #endif
+# LED_TEST draws into plain memory and prints a checksum, for the CLI
+#if RENDER || defined(LED_TEST)
+#define DRAW 1
+#else
+#define DRAW 0
+#endif
+#ifndef DELAY
+#define DELAY 20000
+#endif
 
         .data
 #include "pdb.s"
@@ -60,8 +69,49 @@ twist:  .byte   1, 2, 0, 2, 1, 0, 0, 0
 fact4:  .word   2880, 480, 96, 24, 8, 4, 0
 pow4:   .word   972, 324, 108, 36, 12, 4
 
-cube_p: .zero   8                   # cubie at each position
+cube_p: .byte   0, 0, 0, 0, 0, 0, 0, 7  # cubie at each position, 7 is fixed
 cube_o: .zero   8                   # its orientation
+
+#if DRAW
+# net facelets: x, y of the top-left pixel, position (7 = fixed), slot
+facelets:
+        .byte   9, 0, 6, 0          # U
+        .byte   13, 0, 3, 0         # U
+        .byte   9, 3, 7, 0          # U
+        .byte   13, 3, 0, 0         # U
+        .byte   0, 7, 6, 1          # L
+        .byte   4, 7, 7, 2          # L
+        .byte   0, 10, 5, 2         # L
+        .byte   4, 10, 2, 1         # L
+        .byte   9, 7, 7, 1          # F
+        .byte   13, 7, 0, 2         # F
+        .byte   9, 10, 2, 2         # F
+        .byte   13, 10, 1, 1        # F
+        .byte   18, 7, 0, 1         # R
+        .byte   22, 7, 3, 2         # R
+        .byte   18, 10, 1, 2        # R
+        .byte   22, 10, 4, 1        # R
+        .byte   27, 7, 3, 1         # B
+        .byte   31, 7, 6, 2         # B
+        .byte   27, 10, 4, 2        # B
+        .byte   31, 10, 5, 1        # B
+        .byte   9, 14, 2, 0         # D
+        .byte   13, 14, 1, 0        # D
+        .byte   9, 17, 5, 0         # D
+        .byte   13, 17, 4, 0        # D
+# face of each slot of every cubie at home, 4 bytes per cubie
+home_face:
+        .byte   0, 3, 2, 0
+        .byte   5, 2, 3, 0
+        .byte   5, 1, 2, 0
+        .byte   0, 4, 3, 0
+        .byte   5, 3, 4, 0
+        .byte   5, 4, 1, 0
+        .byte   0, 1, 4, 0
+        .byte   0, 2, 1, 0
+# 24-bit RGB of U, L, F, R, B, D: white, orange, green, red, blue, yellow
+colors: .word   16777215, 16744448, 49152, 16711680, 255, 16776960
+#endif
 tmp:    .zero   8
 moves:  .zero   12                  # solution as move codes
 frames: .zero   192                 # saved levels, 16 bytes each
@@ -78,6 +128,12 @@ next_case:
         beqz    t0, done
         jal     ra, parse           # a0 = p * 4, a1 = o * 4, -1 if invalid
         bltz    a0, case_failed
+#if DRAW
+        jal     t6, render          # the scrambled cube, keeps a0 and a1
+#endif
+#ifdef LED_TEST
+        jal     t6, checksum
+#endif
         jal     ra, solve           # a0 = length, -1 if none
         bltz    a0, case_failed
         mv      s1, a0
@@ -512,6 +568,9 @@ mod_done:
         bne     t3, t5, pull_o
         addi    s4, s4, -1
         bnez    s4, quarter
+#if DRAW
+        jal     t6, render          # redraw after every move of the solution
+#endif
         addi    s2, s2, 1
         j       replay_move
 replay_check:
@@ -533,3 +592,97 @@ check_loop:
 not_solved:
         li      a0, 1
         ret
+
+#if DRAW
+# draw the unfolded net from cube_p/cube_o, return through t6
+# keeps a0, a1 and every s register but s10 and s11
+render:
+        la      a2, facelets
+        la      a3, home_face
+        la      a4, colors
+        la      a5, cube_p
+        la      a6, cube_o
+        li      a7, LED_MATRIX_0_WIDTH
+        slli    a7, a7, 2           # bytes per LED row
+        addi    s10, a2, 96         # 24 facelets, 4 bytes each
+        li      s11, LED_MATRIX_0_BASE
+draw:
+        lbu     t0, 2(a2)           # position
+        add     t1, a5, t0
+        lbu     t1, 0(t1)           # cubie there
+        add     t2, a6, t0
+        lbu     t2, 0(t2)           # its twist
+        lbu     t3, 3(a2)           # slot of this facelet
+        add     t3, t3, t2          # the cubie's home slot, mod 3
+        addi    t2, t3, -3
+        bltz    t2, slot_ok
+        mv      t3, t2
+slot_ok:
+        slli    t1, t1, 2           # 4 bytes per cubie, no multiply
+        add     t1, t1, t3
+        add     t1, a3, t1
+        lbu     t1, 0(t1)           # face the sticker belongs to
+        slli    t1, t1, 2
+        add     t1, a4, t1
+        lw      t1, 0(t1)           # its color
+        # y * row bytes by shift and add over the bits of y
+        lbu     t2, 1(a2)
+        mv      t3, a7
+        li      t4, 0
+mul_y:
+        andi    t5, t2, 1
+        beqz    t5, mul_skip
+        add     t4, t4, t3
+mul_skip:
+        slli    t3, t3, 1
+        srli    t2, t2, 1
+        bnez    t2, mul_y
+        lbu     t2, 0(a2)           # x
+        slli    t2, t2, 2
+        add     t4, t4, t2
+        add     t4, t4, s11         # base + (y * WIDTH + x) * 4
+        li      t2, 3               # facelet is 4 wide and 3 tall
+fill:
+        sw      t1, 0(t4)
+        sw      t1, 4(t4)
+        sw      t1, 8(t4)
+        sw      t1, 12(t4)
+        add     t4, t4, a7
+        addi    t2, t2, -1
+        bnez    t2, fill
+        addi    a2, a2, 4
+        bne     a2, s10, draw
+#ifndef LED_TEST
+        li      t0, DELAY           # slow enough to watch each move
+wait:
+        addi    t0, t0, -1
+        bnez    t0, wait
+#endif
+        jr      t6
+#endif
+
+#ifdef LED_TEST
+# print a rotate-xor checksum of the whole matrix, keeps a0 and a1
+checksum:
+        mv      a2, a0
+        li      t0, LED_MATRIX_0_BASE
+        li      t1, 875             # 35 * 25 words
+        li      t2, 0
+sum_loop:
+        lw      t3, 0(t0)
+        slli    t4, t2, 1
+        srli    t2, t2, 31
+        or      t2, t2, t4
+        xor     t2, t2, t3
+        addi    t0, t0, 4
+        addi    t1, t1, -1
+        bnez    t1, sum_loop
+        mv      a0, t2
+        li      a7, 1
+        ecall
+        la      a0, newline
+        li      a7, 4
+        ecall
+        mv      a0, a2
+        jr      t6
+#endif

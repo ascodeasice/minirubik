@@ -12,7 +12,7 @@ VECTORS := tests/solutions.txt
 INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 	12345671111110 12345671111114 1234567111111a 11345671111111 12345671111112
 
-.PHONY: all check gates ref asm prove clean indent
+.PHONY: all check gates ref asm ledtest prove clean indent
 
 all: solver mini ida
 
@@ -82,6 +82,20 @@ asm: cube-cli.s cube-gui.s $(REF_STATES:%=cube-%.s)
 	@riscv64-linux-gnu-as -march=rv32i -mabi=ilp32 cube-cli.s -o cube-cli.o && \
 		riscv64-linux-gnu-size -A cube-cli.o | \
 		awk '$$1 == ".text" { print ".text", $$2, "bytes" } $$1 == ".data" { print ".data", $$2, "bytes" }'
+
+# renderer in the CLI: draw into plain memory and compare each scrambled
+# frame's checksum with the 3D sticker model in led_model.py
+LED_SUMS := 63575002 370177724 1046056636
+
+cube-ledtest.s: cube.S pdb.s
+	$(CPP_ASM) -DRENDER=0 -DLED_TEST -DLED_MATRIX_0_BASE=0x20000000 \
+		-DLED_MATRIX_0_WIDTH=35 $< -o $@
+
+ledtest: cube-ledtest.s
+	@sums=$$(ripes --mode cli --src cube-ledtest.s -t asm --proc RV32_ISS | \
+		tr -d '\000' | grep -E '^-?[0-9]+$$' | tr '\n' ' '); \
+		test "$$sums" = "$(LED_SUMS) " || { echo "LED checksums: $$sums"; exit 1; }; \
+		echo "LED frames match led_model.py: $$sums"
 
 check: solver mini $(VECTORS)
 	./solver --self-test

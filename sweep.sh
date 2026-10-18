@@ -6,9 +6,11 @@ list=$1
 workers=${2:-10}
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' 0 1 2 15
+# snapshot the source so edits during the sweep cannot mix versions
+cp cube.S pdb.s "$dir"
 cut -d' ' -f1 "$list" | xargs -P "$workers" -I{} sh -c '
     gcc -E -P -x assembler-with-cpp -DRENDER=0 -DSTATE="\"{}\"" -DEXPECT=11 \
-        cube.S -o "$1/{}.s" &&
+        "$1/cube.S" -o "$1/{}.s" &&
     ripes --mode cli --src "$1/{}.s" -t asm --proc RV32_ISS --iret |
         awk "/exited/ { code = \$NF } /retired/ { getline; n = \$1 }
              END { print \"{}\", n, code }"
