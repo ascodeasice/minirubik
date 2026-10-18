@@ -290,14 +290,16 @@ f0t2:
         blt     s6, t3, f0t3
         jal     t6, descend0      # t6 is where this level resumes
 f0t3:
+        # last turn of the face: nothing reuses the ranks if it is pruned,
+        # so test first and load them only for a child that is entered
         add     t0, s3, s1
-        lhu     s1, 0(t0)           # next permutation offset
-        lbu     t1, 2(t0)           # its pattern database value
-        add     t2, s11, s2
-        lhu     s2, 0(t2)
-        lbu     t3, 2(t2)
+        lbu     t1, 2(t0)
         blt     s6, t1, f0end       # h > moves left
+        add     t2, s11, s2
+        lbu     t3, 2(t2)
         blt     s6, t3, f0end
+        lhu     s1, 0(t0)
+        lhu     s2, 0(t2)
         jal     t6, descend0      # t6 is where this level resumes
 f0end:
         beq     s5, t4, face2
@@ -325,14 +327,16 @@ f1t2:
         blt     s6, t3, f1t3
         jal     t6, descend1      # t6 is where this level resumes
 f1t3:
+        # last turn of the face: nothing reuses the ranks if it is pruned,
+        # so test first and load them only for a child that is entered
         add     t0, s4, s1
-        lhu     s1, 0(t0)           # next permutation offset
-        lbu     t1, 2(t0)           # its pattern database value
-        add     t2, a4, s2
-        lhu     s2, 0(t2)
-        lbu     t3, 2(t2)
+        lbu     t1, 2(t0)
         blt     s6, t1, f1end       # h > moves left
+        add     t2, a4, s2
+        lbu     t3, 2(t2)
         blt     s6, t3, f1end
+        lhu     s1, 0(t0)
+        lhu     s2, 0(t2)
         jal     t6, descend1      # t6 is where this level resumes
 f1end:
         beq     s5, t5, ascend
@@ -360,14 +364,16 @@ f2t2:
         blt     s6, t3, f2t3
         jal     t6, descend2      # t6 is where this level resumes
 f2t3:
+        # last turn of the face: nothing reuses the ranks if it is pruned,
+        # so test first and load them only for a child that is entered
         add     t0, s10, s1
-        lhu     s1, 0(t0)           # next permutation offset
-        lbu     t1, 2(t0)           # its pattern database value
-        add     t2, a5, s2
-        lhu     s2, 0(t2)
-        lbu     t3, 2(t2)
+        lbu     t1, 2(t0)
         blt     s6, t1, f2end       # h > moves left
+        add     t2, a5, s2
+        lbu     t3, 2(t2)
         blt     s6, t3, f2end
+        lhu     s1, 0(t0)
+        lhu     s2, 0(t2)
         jal     t6, descend2      # t6 is where this level resumes
 f2end:
 ascend:
