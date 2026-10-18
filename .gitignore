@@ -8,3 +8,7 @@ ida_check
 pdb.h
 ida
 gates-bin
+pdb.s
+cube-*.s
+cube-*.o
+ref/*.elf

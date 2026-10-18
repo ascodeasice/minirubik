@@ -12,7 +12,7 @@ VECTORS := tests/solutions.txt
 INVALID_STATES := 1234567111111 123456711111111 02345671111111 82345671111111 \
 	12345671111110 12345671111114 1234567111111a 11345671111111 12345671111112
 
-.PHONY: all check gates ref prove clean indent
+.PHONY: all check gates ref asm prove clean indent
 
 all: solver mini ida
 
@@ -54,6 +54,34 @@ ref: $(REF_STATES:%=ref/ida-%.elf)
 				/retired/ { getline; print "iret", $$1 }'; \
 	done
 	@riscv64-elf-size -A ref/ida-$(firstword $(REF_STATES)).elf | awk '$$1 == ".text" { print ".text", $$2, "bytes" }'
+
+# hand-written RV32I solver; Ripes' assembler has no .if, so cpp picks
+# the renderer and the cases, and the two builds differ only in RENDER
+CPP_ASM := gcc -E -P -x assembler-with-cpp
+
+pdb.s: pdb_gen
+	./pdb_gen asm >$@
+
+cube-cli.s: cube.S pdb.s
+	$(CPP_ASM) -DRENDER=0 $< -o $@
+
+cube-gui.s: cube.S pdb.s
+	$(CPP_ASM) -DRENDER=1 $< -o $@
+
+cube-%.s: cube.S pdb.s
+	$(CPP_ASM) -DRENDER=0 -DSTATE='"$*"' $< -o $@
+
+# built-in cases on RV32_ISS, then each REF_STATES alone, then .text size
+asm: cube-cli.s cube-gui.s $(REF_STATES:%=cube-%.s)
+	@for src in cube-cli.s $(REF_STATES:%=cube-%.s); do \
+		printf '%s ' $$src; \
+		ripes --mode cli --src $$src -t asm --proc RV32_ISS --iret | \
+			awk '/exited/ { printf "exit %s ", $$NF } \
+				/retired/ { getline; print "iret", $$1 }'; \
+	done
+	@riscv64-linux-gnu-as -march=rv32i -mabi=ilp32 cube-cli.s -o cube-cli.o && \
+		riscv64-linux-gnu-size -A cube-cli.o | \
+		awk '$$1 == ".text" { print ".text", $$2, "bytes" } $$1 == ".data" { print ".data", $$2, "bytes" }'
 
 check: solver mini $(VECTORS)
 	./solver --self-test
@@ -127,4 +155,4 @@ endif
 	$(CLANG_FORMAT) -i $(C_SOURCES)
 
 clean:
-	$(RM) solver mini pdb_gen pdb.h ida gates-bin ref/*.elf
+	$(RM) solver mini pdb_gen pdb.h ida gates-bin ref/*.elf pdb.s cube-*.s cube-*.o
