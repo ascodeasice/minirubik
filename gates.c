@@ -111,13 +111,17 @@ static int gate_h2(const uint8_t *dist)
             state_t s;
             unrank_state(r * ORIENTATIONS, &s);
             s = quarter_turn(s, face);
-            bad_moves += move_perm[face][r] != rank_state(&s) / ORIENTATIONS;
+            bad_moves += move_perm[face][r].next != rank_state(&s) / ORIENTATIONS ||
+                         move_perm[face][r].h !=
+                             pdb_perm[move_perm[face][r].next];
         }
         for (uint32_t r = 0; r < ORIENTATIONS; ++r) {
             state_t s;
             unrank_state(r, &s);
             s = quarter_turn(s, face);
-            bad_moves += move_orient[face][r] != rank_state(&s) % ORIENTATIONS;
+            bad_moves += move_orient[face][r].next != rank_state(&s) % ORIENTATIONS ||
+                         move_orient[face][r].h !=
+                             pdb_orient[move_orient[face][r].next];
         }
     }
 

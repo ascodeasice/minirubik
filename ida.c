@@ -103,12 +103,15 @@ static int search(uint16_t root_p,
             o[depth] = o[depth - 1];
         }
 
-        p[depth] = move_perm[face[depth]][p[depth]];
-        o[depth] = move_orient[face[depth]][o[depth]];
+        // one entry gives the next rank and its heuristic value
+        const move_t *mp = &move_perm[face[depth]][p[depth]];
+        const move_t *mo = &move_orient[face[depth]][o[depth]];
+        p[depth] = mp->next;
+        o[depth] = mo->next;
         ++turns[depth];
         // moves left after this one, test both tables instead of taking max
         int left = bound - depth;
-        if (pdb_perm[p[depth]] > left || pdb_orient[o[depth]] > left)
+        if (mp->h > left || mo->h > left)
             continue;
         // h is 0 only when solved, and a shorter solution would have been
         // found with an earlier bound, so only the last level can be solved
